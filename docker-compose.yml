@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-productdb}
+      POSTGRES_USER: ${POSTGRES_USER:-productuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-productpass}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-productuser} -d ${POSTGRES_DB:-productdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    restart: unless-stopped
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-productdb}
+      POSTGRES_USER: ${POSTGRES_USER:-productuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-productpass}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DJANGO_DEBUG: "True"
+      DJANGO_ALLOWED_HOSTS: "*"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
