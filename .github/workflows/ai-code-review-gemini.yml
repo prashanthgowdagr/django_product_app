@@ -19,7 +19,7 @@ jobs:
 
       - name: Get PR diff
         run: |
-          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
           git diff "origin/${{ github.event.pull_request.base.ref }}...HEAD" > pr.diff
           head -c 100000 pr.diff > pr_trimmed.diff
 
