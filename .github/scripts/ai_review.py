@@ -14,7 +14,7 @@ HEAD_SHA = os.environ["HEAD_SHA"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 GH_TOKEN = os.environ["GH_TOKEN"]
 MAX_COMMENTS = int(os.environ.get("MAX_COMMENTS", "25"))
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.7-flash")
 
 SEVERITY_RANK = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 SEVERITY_ICON = {"Critical": "🔴", "High": "🟠", "Medium": "🟡", "Low": "🔵"}
