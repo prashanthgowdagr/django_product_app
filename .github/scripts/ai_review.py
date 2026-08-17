@@ -2,6 +2,8 @@ import os
 import json
 import re
 import sys
+import time
+import random
 import urllib.request
 import urllib.error
 from unidiff import PatchSet
@@ -77,7 +79,7 @@ CODE:
 """
 
 
-def call_gemini(prompt):
+def call_gemini(prompt, max_retries=5):
     body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
     req = urllib.request.Request(
         f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent",
@@ -87,9 +89,26 @@ def call_gemini(prompt):
             "x-goog-api-key": GEMINI_API_KEY,
         },
     )
-    with urllib.request.urlopen(req) as resp:
-        result = json.load(resp)
-    return result["candidates"][0]["content"]["parts"][0]["text"]
+
+    retryable = {429, 500, 502, 503, 504}
+    last_error_body = ""
+    for attempt in range(1, max_retries + 1):
+        try:
+            with urllib.request.urlopen(req) as resp:
+                result = json.load(resp)
+            return result["candidates"][0]["content"]["parts"][0]["text"]
+        except urllib.error.HTTPError as e:
+            last_error_body = e.read().decode(errors="replace")
+            if e.code in retryable and attempt < max_retries:
+                wait = min(60, 2 ** attempt) + random.random()
+                print(f"Gemini returned {e.code} (attempt {attempt}/{max_retries}), retrying in {wait:.1f}s...")
+                print(f"  response body: {last_error_body[:500]}")
+                time.sleep(wait)
+                continue
+            print(f"Gemini call failed with {e.code} after {attempt} attempt(s): {last_error_body[:1000]}")
+            raise
+
+    raise RuntimeError(f"Gemini call exhausted retries. Last response: {last_error_body[:1000]}")
 
 
 def parse_review(raw_text):
