@@ -1,0 +1,75 @@
+name: AI Code Review (Gemini free tier)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR diff
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
+          git diff "origin/${{ github.event.pull_request.base.ref }}...HEAD" > pr.diff
+          head -c 100000 pr.diff > pr_trimmed.diff
+
+      - name: Run AI review
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, json, urllib.request
+
+          with open("pr_trimmed.diff") as f:
+              diff = f.read()
+
+          if not diff.strip():
+              review_text = "No diff content to review (empty or binary-only change)."
+          else:
+              prompt = (
+                  "Review this pull request diff. Point out bugs, security issues, "
+                  "and code quality problems. Be concise, use bullet points, and "
+                  "reference file names where possible.\n\nDIFF:\n" + diff
+              )
+
+              # Model IDs on Gemini's free tier change fairly often - confirm the
+              # current free-tier model name on Google's pricing page before relying
+              # on this. gemini-3.6-flash is current as of Aug 2026.
+              MODEL = "gemini-3.6-flash"
+
+              body = json.dumps({
+                  "contents": [{"parts": [{"text": prompt}]}]
+              }).encode()
+
+              req = urllib.request.Request(
+                  f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent",
+                  data=body,
+                  headers={
+                      "content-type": "application/json",
+                      "x-goog-api-key": os.environ["GEMINI_API_KEY"]
+                  }
+              )
+              with urllib.request.urlopen(req) as resp:
+                  result = json.load(resp)
+
+              review_text = result["candidates"][0]["content"]["parts"][0]["text"]
+
+          with open("review.md", "w") as f:
+              f.write("## AI Code Review (Gemini)\n\n" + review_text)
+          PYEOF
+
+      - name: Post review comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file review.md
